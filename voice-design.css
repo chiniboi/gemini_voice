@@ -1,0 +1,182 @@
+/* TutorAI Voice: the design.
+   Light by default; dark with data-theme="dark" on <html>. The orb is drawn by voice-orb.js,
+   in the colours below. Every token is prefixed --voice- so it never meets the host's own.
+
+   Markup:
+   <section class="voice-panel">
+     <div class="voice-stage">
+       <canvas class="voice-orb" aria-hidden="true"></canvas>
+       <p class="voice-name">TutorAI Voice</p>
+       <p class="voice-status" role="status" aria-live="polite"></p>   (read by screen readers only)
+     </div>
+     <div class="voice-cards">                                            (newest card first)
+       <article class="voice-card">
+         <p class="voice-card-title">Compound interest</p>
+         <div class="voice-card-body"><p>…</p></div>
+       </article>
+       <article class="voice-card voice-card-error">…</article>
+       <article class="voice-card">                                       (a worked solution, lines numbered)
+         <div class="voice-card-body"><div class="voice-solution">
+           <p class="solution-line">…</p><p class="solution-line">…</p>
+         </div></div>
+       </article>
+     </div>
+     <footer class="voice-bar">
+       <span class="voice-clock">0:37</span>
+       <button class="voice-mute" type="button" aria-pressed="false" aria-label="Mute your microphone">mic icon</button>
+       <button class="voice-mute" type="button" aria-pressed="false" aria-label="Turn the voice off">speaker icon</button>
+       <button class="voice-end" type="button">End</button>
+     </footer>
+   </section>
+   aria-pressed="true" turns a .voice-mute amber. The mic that starts voice is a .voice-mic-toggle.
+   In a card, wrap a wide display formula in .voice-math and a table in .voice-table-scroll:
+   they slide sideways inside the card; nothing else does.
+
+   Icons (24 box, stroked):
+   mic       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
+   mic off   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 9.5V6a3 3 0 0 0-5.6-1.5M9 9v2a3 3 0 0 0 4.7 2.5M5.5 11a6.5 6.5 0 0 0 10.4 5.2M18.5 11a6.5 6.5 0 0 1-.6 2.7M12 17.5V21M4 4l16 16"/></svg>
+   speaker   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+   voice off <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg> */
+
+@import url("https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400..700&family=Alumni+Sans:wght@500&family=JetBrains+Mono:wght@500&display=swap");
+
+:root,
+[data-theme="light"] {
+  --voice-font-ui: "Albert Sans", "Avenir Next", "Helvetica Neue", Arial, system-ui, sans-serif;
+  --voice-font-display: "Alumni Sans", "Avenir Next Condensed", "Arial Narrow", var(--voice-font-ui);
+  --voice-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --voice-type-caption: 12px;
+  --voice-type-ui: 14px;
+  --voice-type-heading: 28px;
+  --voice-radius: 3px;
+  --voice-radius-xs: 2px;
+
+  /* paper and ink; the orb reads these as 6-digit hex */
+  --voice-paper: #fafafa;
+  --voice-ink: #1f2937;
+  --voice-ink-muted: #626c7f;
+  --voice-ink-line: 28%;
+  --voice-ink-strong: 40%;
+  --voice-ink-subtle: 17%;
+
+  --voice-accent: #3559e8;
+  --voice-accent-on: #ffffff;
+  --voice-accent-border-hover: #95aff1;
+  --voice-accent-text: #2947c5;
+  --voice-focus-ring: #7595e9;
+
+  --voice-danger-border: #f0c0b9;
+  --voice-danger-tint: #f9eae8;
+  --voice-danger-tint-hover: #fcdcd8;
+  --voice-danger-text: #a33c33;
+
+  --voice-warning-border: #eab860;
+  --voice-warning-subtle: #fff6e8;
+  --voice-warning-text: #8a6120;
+
+  /* the orb: blue disc on light paper, its listening ring, and the rings it speaks in */
+  --voice-disc: #3559e8;
+  --voice-listen: #7595e9;
+  --voice-ring-1: #6591e1;
+  --voice-ring-2: #32ada7;
+  --voice-ring-3: #73b04d;
+  --voice-ring-4: #d6a440;
+  --voice-ring-5: #d8655a;
+  --voice-ring-6: var(--voice-ink);
+
+  /* the sheet's grain: dark flecks on light paper */
+  --voice-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='g' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -.22 0 0 0 .14'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  --voice-grain-size: 256px;
+
+  --voice-text: var(--voice-ink);
+  --voice-text-muted: var(--voice-ink-muted);
+  --voice-border: color-mix(in srgb, var(--voice-ink) var(--voice-ink-line), transparent);
+  --voice-border-strong: color-mix(in srgb, var(--voice-ink) var(--voice-ink-strong), transparent);
+  --voice-border-subtle: color-mix(in srgb, var(--voice-ink) var(--voice-ink-subtle), transparent);
+}
+
+[data-theme="dark"] {
+  --voice-paper: #1a1a1a;
+  --voice-ink: #eceef2;
+  --voice-ink-muted: #949cac;
+  --voice-ink-line: 17%;
+  --voice-ink-strong: 27%;
+  --voice-ink-subtle: 11%;
+
+  --voice-accent: #4466ee;
+  --voice-accent-border-hover: #374e9d;
+  --voice-accent-text: #92b2ff;
+  --voice-focus-ring: #405cb8;
+
+  --voice-danger-border: #73241e;
+  --voice-danger-tint: #3b1310;
+  --voice-danger-tint-hover: #520f0c;
+  --voice-danger-text: #ff9182;
+
+  --voice-warning-border: #644e27;
+  --voice-warning-subtle: #1d1a14;
+  --voice-warning-text: #efbd65;
+
+  /* white ink disc on charcoal */
+  --voice-disc: #eceef2;
+  --voice-listen: #405cb8;
+
+  /* light flecks on dark paper */
+  --voice-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='g' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 .2 0 0 0 -.06'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+/* The panel: one grained sheet, the orb on top, cards under it, the bar at the bottom */
+.voice-panel { flex:1; min-height:0; display:flex; flex-direction:column; color:var(--voice-text); font-family:var(--voice-font-ui); font-size:var(--voice-type-ui); -webkit-font-smoothing:antialiased; background:var(--voice-grain) 0 0/var(--voice-grain-size) var(--voice-grain-size), var(--voice-paper); }
+.voice-stage { position:relative; display:flex; flex-direction:column; align-items:center; padding:28px 16px 14px; }
+.voice-orb { display:block; width:174px; max-width:64%; aspect-ratio:1; }
+.voice-name { margin:12px 0 0; color:var(--voice-text); font:500 var(--voice-type-heading)/1 var(--voice-font-display); letter-spacing:.004em; }
+.voice-status { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+
+/* Cards: newest first; only display maths and tables slide sideways, inside their card */
+.voice-cards { flex:1; min-height:0; display:flex; flex-direction:column; gap:10px; overflow-x:hidden; overflow-y:auto; padding:8px 16px 16px; }
+.voice-card { display:grid; grid-template-columns:minmax(0,1fr); min-width:0; gap:6px; padding:12px 14px; border:1px solid var(--voice-border); border-radius:var(--voice-radius); background:var(--voice-paper); color:var(--voice-text); font-size:var(--voice-type-ui); line-height:1.55; contain:paint; animation:voice-card-in .22s cubic-bezier(.16,1,.3,1); }
+.voice-card-title { margin:0; color:var(--voice-text-muted); font-size:var(--voice-type-caption); font-weight:600; line-height:1.2; }
+.voice-card-body { min-width:0; }
+/* a card is lines to skim: each line keeps its own line */
+.voice-card-body p { margin:0 0 9px; white-space:pre-line; }
+.voice-card-body :is(p,li) { overflow-x:auto; overflow-y:hidden; padding-block:2px; }
+.voice-card-body :is(ul,ol) { margin:0 0 9px; padding-left:0; list-style-position:inside; }
+.voice-card-body li { margin:0 0 3px; padding-left:1.15em; text-indent:-1.15em; }
+.voice-card-body li > * { text-indent:0; }
+.voice-card-body :is(p,ul,ol):last-child { margin-bottom:0; }
+.voice-card-body strong { font-weight:600; }
+.voice-card-body code { padding:1px 4px; border-radius:var(--voice-radius-xs); background:color-mix(in srgb, var(--voice-ink) 8%, transparent); font-family:var(--voice-font-mono); font-size:.9em; }
+.voice-math { overflow-x:auto; margin:0 0 9px; padding:2px 0; text-align:center; }
+.voice-table-scroll { overflow-x:auto; margin:0 0 9px; }
+.voice-math:last-child,.voice-table-scroll:last-child { margin-bottom:0; }
+.voice-table-scroll table { border-collapse:collapse; width:100%; font-size:var(--voice-type-caption); line-height:1.45; }
+.voice-table-scroll :is(th,td) { padding:5px 3px; border-bottom:1px solid var(--voice-border-subtle); text-align:left; vertical-align:top; overflow-wrap:break-word; }
+.voice-table-scroll :is(th,td):first-child { padding-left:0; }
+.voice-card-error { border-color:var(--voice-danger-border); background:var(--voice-danger-tint); color:var(--voice-danger-text); }
+/* a worked solution, its lines numbered as parts */
+.voice-solution { display:flex; flex-direction:column; gap:6px; counter-reset:part; }
+.voice-solution .solution-line { margin:0; line-height:1.6; counter-increment:part; position:relative; padding-left:1.7em; }
+.voice-solution .solution-line::before { content:counter(part) "."; position:absolute; left:0; color:var(--voice-text-muted); font-variant-numeric:tabular-nums; }
+@keyframes voice-card-in { from { opacity:0; transform:translateY(-4px); } }
+
+/* The bar: the call's clock, mic and voice switches, End */
+.voice-bar { display:flex; align-items:center; gap:8px; padding:12px 16px 16px; border-top:1px solid var(--voice-border); }
+.voice-clock { margin-right:auto; color:var(--voice-text-muted); font:500 var(--voice-type-caption)/1 var(--voice-font-mono); font-variant-numeric:tabular-nums; }
+.voice-mute { display:grid; width:32px; height:32px; padding:0; place-items:center; border:1px solid var(--voice-border); border-radius:var(--voice-radius); background:var(--voice-paper); color:var(--voice-text-muted); cursor:pointer; }
+.voice-mute:hover { border-color:var(--voice-border-strong); color:var(--voice-text); }
+.voice-mute[aria-pressed="true"] { border-color:var(--voice-warning-border); background:var(--voice-warning-subtle); color:var(--voice-warning-text); }
+.voice-end { height:32px; padding:0 14px; border:1px solid var(--voice-danger-border); border-radius:var(--voice-radius); background:var(--voice-danger-tint); color:var(--voice-danger-text); font-family:var(--voice-font-ui); font-size:var(--voice-type-caption); font-weight:600; cursor:pointer; }
+.voice-end:hover { background:var(--voice-danger-tint-hover); }
+
+/* The mic that starts voice: filled with the accent while voice is on */
+.voice-mic-toggle { display:grid; width:29px; height:29px; padding:0; place-items:center; border:1px solid var(--voice-border); border-radius:var(--voice-radius); background:var(--voice-paper); color:var(--voice-text-muted); cursor:pointer; }
+.voice-mic-toggle:hover:not(:disabled) { border-color:var(--voice-accent-border-hover); color:var(--voice-accent-text); }
+.voice-mic-toggle[aria-pressed="true"] { border-color:var(--voice-accent); background:var(--voice-accent); color:var(--voice-accent-on); }
+
+.voice-mute svg { width:15px; height:15px; }
+.voice-mic-toggle svg { width:17px; height:17px; stroke-width:1.5; }
+:is(.voice-mute,.voice-mic-toggle) svg { fill:none; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; }
+.voice-mute svg { stroke-width:1.8; }
+:is(.voice-bar button,.voice-mic-toggle):focus-visible { outline:2px solid var(--voice-focus-ring); outline-offset:1px; }
+
+@media (prefers-reduced-motion:reduce) { .voice-card { animation:none; } }
